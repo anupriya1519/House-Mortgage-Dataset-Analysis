@@ -1,0 +1,257 @@
+---
+title: "Home Mortgage Disclosure Act Data"
+output: html_notebook
+---
+
+Description:
+Cross-section data on the Home Mortgage Disclosure Act (HMDA).
+A data frame containing 2,380 observations on 14 variables.
+
+```{r}
+library(AER)
+data(HMDA)
+dataset<- data.frame(HMDA)
+names(dataset)
+dim(dataset)
+str(dataset)
+summary(dataset)
+head(dataset)
+sapply(dataset,function(x) sum(is.na(x)))
+
+```
+
+As we can see data is clean, there are no missing values. Categorical values are already defined and correctly labeled.
+pirat,hirat,lvrat,phist are left skewed.
+
+QQ-plot and density plots for payment to income ratio
+
+```{r}
+qqnorm(dataset$pirat)
+qqline(dataset$pirat,col='blue')
+plot(density(dataset$pirat),main='Pirat')
+```
+
+The plot looks right skewed with few outliers.
+
+QQ-plot and density plots housing expense to income ratio
+```{r}
+qqnorm(dataset$hirat)
+qqline(dataset$hirat,col='blue')
+plot(density(dataset$hirat),main='hirat')
+```
+
+The plot looks right skewed with few outliers.
+
+QQ-plot and dnsity plots Loan to value ratio
+```{r}
+qqnorm(dataset$lvrat)
+qqline(dataset$lvrat,col='blue')
+plot(density(dataset$lvrat),main='lvrat')
+```
+
+
+QQ-plot and density plots unemployment
+
+```{r}
+qqnorm(dataset$unemp)
+qqline(dataset$unemp,col='blue')
+plot(density(dataset$unemp),main='Unemp')
+```
+
+Box-Plots
+
+```{r}
+library(ggplot2)
+p10 <- ggplot(dataset, aes(x = deny, y = unemp)) +
+        geom_boxplot()
+p10
+p11 <- ggplot(dataset, aes(x = deny, y = pirat)) +
+        geom_boxplot()
+p11
+```
+
+From the various QQ-Plots and Box-Plots we can conclude outliers are present.
+
+Model fitting:
+
+We split the data into two chunks: training and testing set. The training set will be used to fit our model which we will be testing over the testing set.
+```{r}
+dt = sort(sample(nrow(dataset), nrow(dataset)*.8))
+train<-dataset[dt,]
+test<-dataset[-dt,]
+```
+
+Now, let's fit the model.
+
+```{r}
+model1 <- glm(deny~.,family=binomial(link='logit'),data=train)
+summary(model1)
+```
+
+By using function summary() we obtain the results of our model.
+Interpreting the results of our logistic regression model:
+Now we can analyze the fitting and interpret what the model is telling us.
+First of all, we can see that hirat, mhist3,mhist4,unemp and condominyes are not statistically significant. Whereas pirat, phistyes, insuranceyes, afamyes are statistically significant variables based on the p-values and AIC is 1024.9.
+
+
+Now we can run the anova() function on the model to analyze the table of deviance
+
+```{r}
+anova(model1, test="Chisq")
+```
+The difference between the null deviance and the residual deviance shows how our model is doing against the null model (a model with only the intercept). The wider this gap, the better. Analyzing the table we can see the drop in deviance when adding each variable one at a time. Again, adding lvrat, chist,phist,afam and hschool significantly reduces the residual deviance. A large p-value here indicates that the model without the variable explains more or less the same amount of variation. Ultimately what you would like to see is a significant drop in deviance and the AIC.
+
+```{r}
+model2 <- glm(deny~pirat+lvrat+chist+phist+selfemp+insurance+afam+single+hschool,family=binomial(link='logit'),data=train)
+summary(model2)
+```
+
+In model two hirat,unemp,mhist and condomin are removed. AIC is 1016.6.
+
+```{r}
+anova(model2, test="Chisq")
+```
+
+```{r}
+model3 <- glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+summary(model3)
+```
+
+```{r}
+anova(model3, test="Chisq")
+```
+
+Even we can see the p-value associated with selfemp and unemp is not significant as its large but removing the element from model increases the AIC value. So model3 is not a good model.
+
+From here we conclude that model2 is the best. Now we will use forward selection to verify our model.
+
+```{r}
+fit1<- glm(deny~pirat,family=binomial(link='logit'),data=train)
+summary(fit1)
+fit2<-glm(deny~pirat+hirat,family=binomial(link='logit'),data=train)
+summary(fit2)
+fit3<-glm(deny~pirat+lvrat,family=binomial(link='logit'),data=train)
+summary(fit3)
+fit4<-glm(deny~pirat+lvrat+chist,family=binomial(link='logit'),data=train)
+summary(fit4)
+fit5<-glm(deny~pirat+lvrat+chist+mhist,family=binomial(link='logit'),data=train)
+summary(fit5)
+fit6<-glm(deny~pirat+lvrat+chist+phist,family=binomial(link='logit'),data=train)
+summary(fit6)
+fit7<-glm(deny~pirat+lvrat+chist+phist+unemp,family=binomial(link='logit'),data=train)
+summary(fit7)
+fit8<-glm(deny~pirat+lvrat+chist+phist+selfemp,family=binomial(link='logit'),data=train)
+summary(fit8)
+fit9<-glm(deny~pirat+lvrat+chist+phist+insurance,family=binomial(link='logit'),data=train)
+summary(fit9)
+anova(fit9, test="Chisq")
+fit10<-glm(deny~pirat+lvrat+chist+phist+insurance+condomin,family=binomial(link='logit'),data=train)
+summary(fit10)
+fit11<-glm(deny~pirat+lvrat+chist+phist+insurance+afam,family=binomial(link='logit'),data=train)
+summary(fit11)
+fit12<-glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+summary(fit12)
+fit13<-glm(deny~pirat+lvrat+chist+insurance+afam+single+hschool,family=binomial(link='logit'),data=train)
+summary(fit13)
+
+
+```
+fit2 discard as AIC increases and p-value is too large
+fit3 is good AIC reduces 
+fit4  
+fit5 even though the p-values are too large the AIC of the model decreases**
+fit6 is good
+fit7 although the AIC remains same we can see thr p-value associated with unemp is large so fit7 is not a good model
+fit8 AIC remains same, the p-value is greater than 0.05 so fit8 is discarded
+fit9 Even though the AIC increases, but the deviance decreases significantly and the assosiated p-value is significant we will keep fit9
+fit10 discard based on p-values
+fit11 is good reduces AIC a lot
+fit12 is good
+fit13 discard
+
+
+So fit12 is the best model. Comparing it with our previous model3
+
+```{r}
+model3 <- glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+summary(model3)
+
+model2 <- glm(deny~pirat+lvrat+chist+phist+selfemp+insurance+afam+single+hschool,family=binomial(link='logit'),data=train)
+
+fit12<-glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+summary(fit12)
+```
+
+
+So from the forward model selection method we can conclude Model3 is the best.
+
+So our model is :
+model3 <- glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+
+
+```{r}
+fm1 <- lm(I(as.numeric(deny) - 1) ~ pirat+lvrat+chist+phist+insurance+afam+single, data = dataset)
+summary(fm1)
+fm2 <- lm(I(as.numeric(deny) - 1) ~ pirat+lvrat+chist+insurance+afam+single+hschool, data = dataset)
+summary(fm2)
+fm3 <- lm(I(as.numeric(deny) - 1) ~., data = dataset)
+summary(fm3)
+```
+
+```{r}
+plot(model3)
+```
+
+Partial F-Test
+
+```{r}
+full_model<-glm(deny~.,family=binomial(link='logit'),data=train)
+
+model3 <- glm(deny~pirat+lvrat+chist+phist+insurance+afam+single,family=binomial(link='logit'),data=train)
+anova(full_model,model3)
+```
+
+
+Assessing the predictive ability of the model
+```{r}
+train$model3 <- predict(model2, train, type="response")
+head(train)
+tail(train)
+library(gmodels)
+library(ggplot2)
+library (Hmisc)
+library (caTools)
+library (ROCR)
+colAUC(train$model3,train$deny, plotROC=TRUE)
+
+predict1 <- ifelse(train$model3>0.95, 1, 0)
+
+tab1 <- table(predicted = predict1, actual = train$deny)
+tab1
+accuracy1<-(tab1[1,1]+tab1[2,2])/(tab1[1,1]+tab1[2,2]+tab1[1,2]+tab1[2,1])
+recall1<-(tab1[2,2])/(tab1[1,2]+tab1[2,2])
+precision1<-(tab1[2,2])/(tab1[2,2]+tab1[2,1])
+print(c("Accuracy:",accuracy1))
+print(c("Precision:",precision1))
+print(c("Recall:",recall1))
+
+test$model3 <- predict(model3, test, type='response')
+
+
+colAUC(test$model3,test$deny, plotROC=TRUE)
+
+predict2 <- ifelse(test$model3>0.95, 1,0)
+tab2 <- table(predicted = predict2, actual = test$deny)
+tab2
+accuracy<-(tab2[1,1]+tab2[2,2])/(tab2[1,1]+tab2[2,2]+tab2[1,2]+tab2[2,1])
+recall<-(tab2[2,2])/(tab2[1,2]+tab2[2,2])
+precision<-(tab2[2,2])/(tab2[2,2]+tab2[2,1])
+
+print(c("Accuracy:",accuracy))
+print(c("Precision:",precision))
+print(c("Recall:",recall))
+```
+
+
+
+
